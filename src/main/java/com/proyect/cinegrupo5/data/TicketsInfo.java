@@ -1,22 +1,20 @@
 package com.proyect.cinegrupo5.data;
 
-import jakarta.persistence.Entity;
 
-@Entity
 public class TicketsInfo extends AbstractEntity {
 
-    private String numeroTicket;
+    private Integer ticketsid;
     private String pelicula;
-    private Integer asiento;
-    private Integer numeroSala;
-    private String tipoSala;
-    private Integer precio;
+    private String asiento;
+    private String numerosala;
+    private String tiposala;
+    private String precio;
 
-    public String getNumeroTicket() {
-        return numeroTicket;
+    public Integer getNumeroTicket() {
+        return ticketsid;
     }
-    public void setNumeroTicket(String numeroTicket) {
-        this.numeroTicket = numeroTicket;
+    public void setNumeroTicket(int numeroTicket) {
+        this.ticketsid = numeroTicket;
     }
     public String getPelicula() {
         return pelicula;
@@ -24,28 +22,28 @@ public class TicketsInfo extends AbstractEntity {
     public void setPelicula(String pelicula) {
         this.pelicula = pelicula;
     }
-    public Integer getAsiento() {
+    public String getAsiento() {
         return asiento;
     }
-    public void setAsiento(Integer asiento) {
+    public void setAsiento(String asiento) {
         this.asiento = asiento;
     }
-    public Integer getNumeroSala() {
-        return numeroSala;
+    public String getNumeroSala() {
+        return numerosala;
     }
-    public void setNumeroSala(Integer numeroSala) {
-        this.numeroSala = numeroSala;
+    public void setNumeroSala(String numeroSala) {
+        this.numerosala = numeroSala;
     }
     public String getTipoSala() {
-        return tipoSala;
+        return tiposala;
     }
     public void setTipoSala(String tipoSala) {
-        this.tipoSala = tipoSala;
+        this.tiposala = tipoSala;
     }
-    public Integer getPrecio() {
+    public String getPrecio() {
         return precio;
     }
-    public void setPrecio(Integer precio) {
+    public void setPrecio(String precio) {
         this.precio = precio;
     }
 

@@ -1,243 +1,265 @@
 package com.proyect.cinegrupo5.views.salas;
 
-import com.proyect.cinegrupo5.data.SamplePerson;
-import com.proyect.cinegrupo5.services.SamplePersonService;
-import com.vaadin.flow.component.Component;
+import com.proyect.cinegrupo5.controller.SalasInteractor;
+import com.proyect.cinegrupo5.controller.SalasInteractorImpl;
+//import com.proyect.cinegrupo5.controller.TicketsInteractor;
+import com.proyect.cinegrupo5.data.SalasInfo;
+//import com.proyect.cinegrupo5.data.TicketsInfo;
 import com.vaadin.flow.component.Text;
+import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
-import com.vaadin.flow.component.checkbox.CheckboxGroup;
-import com.vaadin.flow.component.combobox.MultiSelectComboBox;
-import com.vaadin.flow.component.datepicker.DatePicker;
-import com.vaadin.flow.component.dependency.Uses;
+import com.vaadin.flow.component.combobox.ComboBox;
+import com.vaadin.flow.component.formlayout.FormLayout;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.grid.GridVariant;
 import com.vaadin.flow.component.html.Div;
-import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.Icon;
-import com.vaadin.flow.component.orderedlayout.FlexComponent;
-import com.vaadin.flow.component.orderedlayout.FlexLayout;
+import com.vaadin.flow.component.icon.VaadinIcon;
+import com.vaadin.flow.component.notification.Notification;
+import com.vaadin.flow.component.notification.Notification.Position;
+import com.vaadin.flow.component.notification.NotificationVariant;
+import com.vaadin.flow.component.orderedlayout.FlexComponent.Alignment;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
-import com.vaadin.flow.component.orderedlayout.VerticalLayout;
+import com.vaadin.flow.component.splitlayout.SplitLayout;
 import com.vaadin.flow.component.textfield.TextField;
-import com.vaadin.flow.router.Menu;
+//import com.vaadin.flow.data.binder.BeanValidationBinder;
+//import com.vaadin.flow.data.binder.ValidationException;
+//import com.vaadin.flow.data.converter.StringToIntegerConverter;
+import com.vaadin.flow.router.BeforeEnterEvent;
+import com.vaadin.flow.router.BeforeEnterObserver;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
-import com.vaadin.flow.spring.data.VaadinSpringDataHelpers;
-import com.vaadin.flow.theme.lumo.LumoUtility;
-import jakarta.persistence.criteria.CriteriaBuilder;
-import jakarta.persistence.criteria.CriteriaQuery;
-import jakarta.persistence.criteria.Expression;
-import jakarta.persistence.criteria.Predicate;
-import jakarta.persistence.criteria.Root;
+import com.vaadin.flow.router.Menu;
+
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.jpa.domain.Specification;
+import java.util.Optional;
 
 @PageTitle("Salas")
-@Route("grid-with-filters")
-@Menu(order = 2, icon = "line-awesome/svg/warehouse-solid.svg")
-@Uses(Icon.class)
-public class SalasView extends Div {
+@Route(value = "salas/:salasInfoID?/:action?(edit)")
+@Menu(order = 1, icon = "line-awesome/svg/film-solid.svg")
+public class SalasView extends Div implements BeforeEnterObserver,SalasViewModel {
 
-    private Grid<SamplePerson> grid;
+    private final String SALASINFO_ID = "salasInfoID";
+    private final String SALASINFO_EDIT_ROUTE_TEMPLATE = "salas/%s/edit";
 
-    private Filters filters;
-    private final SamplePersonService samplePersonService;
+    private final Grid<SalasInfo> grid = new Grid<>(SalasInfo.class, false);
 
-    public SalasView(SamplePersonService SamplePersonService) {
-        this.samplePersonService = SamplePersonService;
-        setSizeFull();
+    private TextField numerosala;
+    private ComboBox<String> tiposala;
+    private ComboBox<String> seccion;
+    private TextField fila;
+    private TextField asientosdisponibles;
+
+    private final Button cancelar = new Button("Cancelar", new Icon(VaadinIcon.CLOSE_SMALL));
+    private final Button guardar = new Button("Guardar", new Icon(VaadinIcon.CHECK));
+
+
+    private SalasInfo salasInfo;
+    private List<SalasInfo> salas;
+    private SalasInteractor controlador;
+
+    
+
+    public SalasView() {
         addClassNames("salas-view");
+        
+        controlador = new SalasInteractorImpl(this);
+        salas = new ArrayList<>();
 
-        filters = new Filters(() -> refreshGrid());
-        VerticalLayout layout = new VerticalLayout(createMobileFilters(), filters, createGrid());
-        layout.setSizeFull();
-        layout.setPadding(false);
-        layout.setSpacing(false);
-        add(layout);
-    }
+        // Create UI
+        SplitLayout splitLayout = new SplitLayout();
 
-    private HorizontalLayout createMobileFilters() {
-        // Mobile version
-        HorizontalLayout mobileFilters = new HorizontalLayout();
-        mobileFilters.setWidthFull();
-        mobileFilters.addClassNames(LumoUtility.Padding.MEDIUM, LumoUtility.BoxSizing.BORDER,
-                LumoUtility.AlignItems.CENTER);
-        mobileFilters.addClassName("mobile-filters");
+        createGridLayout(splitLayout);
+        createEditorLayout(splitLayout);
 
-        Icon mobileIcon = new Icon("lumo", "plus");
-        Span filtersHeading = new Span("Filters");
-        mobileFilters.add(mobileIcon, filtersHeading);
-        mobileFilters.setFlexGrow(1, filtersHeading);
-        mobileFilters.addClickListener(e -> {
-            if (filters.getClassNames().contains("visible")) {
-                filters.removeClassName("visible");
-                mobileIcon.getElement().setAttribute("icon", "lumo:plus");
+        add(splitLayout);
+
+        // Configure Grid
+        grid.addColumn("numeroSala").setAutoWidth(true).setHeader("Número de Sala");
+        grid.addColumn("tipoSala").setAutoWidth(true).setHeader("Tipo de Sala");
+        grid.addColumn("seccion").setAutoWidth(true).setHeader("Sección");
+        grid.addColumn("fila").setAutoWidth(true).setHeader("Fila");
+        grid.addColumn("asientosDisponibles").setAutoWidth(true).setHeader("Asientos Disponibles");
+
+        grid.addThemeVariants(GridVariant.LUMO_NO_BORDER);
+
+        // when a row is selected or deselected, populate form
+        grid.asSingleSelect().addValueChangeListener(event -> {
+            if (event.getValue() != null) {
+                UI.getCurrent().navigate(String.format(SALASINFO_EDIT_ROUTE_TEMPLATE, event.getValue().getId()));
             } else {
-                filters.addClassName("visible");
-                mobileIcon.getElement().setAttribute("icon", "lumo:minus");
+                clearForm();
+                UI.getCurrent().navigate(SalasView.class);
             }
         });
-        return mobileFilters;
-    }
 
-    public static class Filters extends Div implements Specification<SamplePerson> {
+        // Configure Form
+        //binder = new BeanValidationBinder<>(SalasInfo.class);
 
-        private final TextField name = new TextField("Name");
-        private final TextField phone = new TextField("Phone");
-        private final DatePicker startDate = new DatePicker("Date of Birth");
-        private final DatePicker endDate = new DatePicker();
-        private final MultiSelectComboBox<String> occupations = new MultiSelectComboBox<>("Occupation");
-        private final CheckboxGroup<String> roles = new CheckboxGroup<>("Role");
+        // Bind fields. This is where you'd define field validation
+        //binder.forField(numeroSala)
+                //.withConverter(new StringToIntegerConverter("Solo se permiten números"))
+                //.bind("numeroSala");
+        //binder.forField(asientosDisponibles)
+               // .withConverter(new StringToIntegerConverter("Solo se permiten números"))
+                //.bind("asientosDisponibles");
 
-        public Filters(Runnable onSearch) {
+        //binder.bindInstanceFields(this);
 
-            setWidthFull();
-            addClassName("filter-layout");
-            addClassNames(LumoUtility.Padding.Horizontal.LARGE, LumoUtility.Padding.Vertical.MEDIUM,
-                    LumoUtility.BoxSizing.BORDER);
-            name.setPlaceholder("First or last name");
+        cancelar.addClickListener(e -> {
+            clearForm();
+            refreshGrid();
+        });
 
-            occupations.setItems("Insurance Clerk", "Mortarman", "Beer Coil Cleaner", "Scale Attendant");
-
-            roles.setItems("Worker", "Supervisor", "Manager", "External");
-            roles.addClassName("double-width");
-
-            // Action buttons
-            Button resetBtn = new Button("Reset");
-            resetBtn.addThemeVariants(ButtonVariant.LUMO_TERTIARY);
-            resetBtn.addClickListener(e -> {
-                name.clear();
-                phone.clear();
-                startDate.clear();
-                endDate.clear();
-                occupations.clear();
-                roles.clear();
-                onSearch.run();
-            });
-            Button searchBtn = new Button("Search");
-            searchBtn.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
-            searchBtn.addClickListener(e -> onSearch.run());
-
-            Div actions = new Div(resetBtn, searchBtn);
-            actions.addClassName(LumoUtility.Gap.SMALL);
-            actions.addClassName("actions");
-
-            add(name, phone, createDateRangeFilter(), occupations, roles, actions);
-        }
-
-        private Component createDateRangeFilter() {
-            startDate.setPlaceholder("From");
-
-            endDate.setPlaceholder("To");
-
-            // For screen readers
-            startDate.setAriaLabel("From date");
-            endDate.setAriaLabel("To date");
-
-            FlexLayout dateRangeComponent = new FlexLayout(startDate, new Text(" – "), endDate);
-            dateRangeComponent.setAlignItems(FlexComponent.Alignment.BASELINE);
-            dateRangeComponent.addClassName(LumoUtility.Gap.XSMALL);
-
-            return dateRangeComponent;
-        }
-
-        @Override
-        public Predicate toPredicate(Root<SamplePerson> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
-            List<Predicate> predicates = new ArrayList<>();
-
-            if (!name.isEmpty()) {
-                String lowerCaseFilter = name.getValue().toLowerCase();
-                Predicate firstNameMatch = criteriaBuilder.like(criteriaBuilder.lower(root.get("firstName")),
-                        lowerCaseFilter + "%");
-                Predicate lastNameMatch = criteriaBuilder.like(criteriaBuilder.lower(root.get("lastName")),
-                        lowerCaseFilter + "%");
-                predicates.add(criteriaBuilder.or(firstNameMatch, lastNameMatch));
-            }
-            if (!phone.isEmpty()) {
-                String databaseColumn = "phone";
-                String ignore = "- ()";
-
-                String lowerCaseFilter = ignoreCharacters(ignore, phone.getValue().toLowerCase());
-                Predicate phoneMatch = criteriaBuilder.like(
-                        ignoreCharacters(ignore, criteriaBuilder, criteriaBuilder.lower(root.get(databaseColumn))),
-                        "%" + lowerCaseFilter + "%");
-                predicates.add(phoneMatch);
-
-            }
-            if (startDate.getValue() != null) {
-                String databaseColumn = "dateOfBirth";
-                predicates.add(criteriaBuilder.greaterThanOrEqualTo(root.get(databaseColumn),
-                        criteriaBuilder.literal(startDate.getValue())));
-            }
-            if (endDate.getValue() != null) {
-                String databaseColumn = "dateOfBirth";
-                predicates.add(criteriaBuilder.greaterThanOrEqualTo(criteriaBuilder.literal(endDate.getValue()),
-                        root.get(databaseColumn)));
-            }
-            if (!occupations.isEmpty()) {
-                String databaseColumn = "occupation";
-                List<Predicate> occupationPredicates = new ArrayList<>();
-                for (String occupation : occupations.getValue()) {
-                    occupationPredicates
-                            .add(criteriaBuilder.equal(criteriaBuilder.literal(occupation), root.get(databaseColumn)));
-                }
-                predicates.add(criteriaBuilder.or(occupationPredicates.toArray(Predicate[]::new)));
-            }
-            if (!roles.isEmpty()) {
-                String databaseColumn = "role";
-                List<Predicate> rolePredicates = new ArrayList<>();
-                for (String role : roles.getValue()) {
-                    rolePredicates.add(criteriaBuilder.equal(criteriaBuilder.literal(role), root.get(databaseColumn)));
-                }
-                predicates.add(criteriaBuilder.or(rolePredicates.toArray(Predicate[]::new)));
-            }
-            return criteriaBuilder.and(predicates.toArray(Predicate[]::new));
-        }
-
-        private String ignoreCharacters(String characters, String in) {
-            String result = in;
-            for (int i = 0; i < characters.length(); i++) {
-                result = result.replace("" + characters.charAt(i), "");
-            }
-            return result;
-        }
-
-        private Expression<String> ignoreCharacters(String characters, CriteriaBuilder criteriaBuilder,
-                Expression<String> inExpression) {
-            Expression<String> expression = inExpression;
-            for (int i = 0; i < characters.length(); i++) {
-                expression = criteriaBuilder.function("replace", String.class, expression,
-                        criteriaBuilder.literal(characters.charAt(i)), criteriaBuilder.literal(""));
-            }
-            return expression;
-        }
+        guardar.addClickListener(e -> {
+            if (this.salasInfo == null) {
+			    this.salasInfo = new SalasInfo();
+			}
+            // binder.writeBean(this.salasInfo);
+			clearForm();
+			refreshGrid();
+			mostrarMensajeExito("Sala guardada correctamente");
+			UI.getCurrent().navigate(SalasView.class);
+        });
+        controlador.consultarSalas();
 
     }
 
-    private Component createGrid() {
-        grid = new Grid<>(SamplePerson.class, false);
-        grid.addColumn("firstName").setAutoWidth(true);
-        grid.addColumn("lastName").setAutoWidth(true);
-        grid.addColumn("email").setAutoWidth(true);
-        grid.addColumn("phone").setAutoWidth(true);
-        grid.addColumn("dateOfBirth").setAutoWidth(true);
-        grid.addColumn("occupation").setAutoWidth(true);
-        grid.addColumn("role").setAutoWidth(true);
-
-        grid.setItems(query -> samplePersonService.list(
-                PageRequest.of(query.getPage(), query.getPageSize(), VaadinSpringDataHelpers.toSpringDataSort(query)),
-                filters).stream());
-        grid.addThemeVariants(GridVariant.LUMO_NO_BORDER);
-        grid.addClassNames(LumoUtility.Border.TOP, LumoUtility.BorderColor.CONTRAST_10);
-
-        return grid;
+    @Override
+    public void beforeEnter(BeforeEnterEvent event) {
+        Optional<Long> salasInfoId = event.getRouteParameters().get(SALASINFO_ID).map(Long::parseLong);
+        if (salasInfoId.isPresent()) {
+            // Add your logic here to load the data
+        }
     }
 
-    private void refreshGrid() {
+    private void createEditorLayout(SplitLayout splitLayout)
+    {
+        Div editorLayoutDiv = new Div();
+        editorLayoutDiv.setClassName("editor-layout");
+
+        Div editorDiv = new Div();
+        editorDiv.setClassName("editor");
+        editorLayoutDiv.add(editorDiv);
+
+        FormLayout formLayout = new FormLayout();
+        
+        numerosala = new TextField("Número de Sala");
+        numerosala.setClearButtonVisible(true);
+        numerosala.setPrefixComponent(VaadinIcon.FILM.create());
+        
+        tiposala = new ComboBox<>("Tipo de Sala");
+        tiposala.setItems("2D", "3D", "4D", "PREMIUM");
+        tiposala.setPlaceholder("Seleccione tipo de sala");
+        
+        seccion = new ComboBox<>("Sección");
+        seccion.setItems("FRONTAL", "MEDIO", "TRASERA", "DERECHA", "IZQUIERDA", "PALCO");
+        seccion.setPlaceholder("Seleccione la sección");
+        
+        fila = new TextField("Fila");
+        fila.setClearButtonVisible(true);
+        fila.setPrefixComponent(VaadinIcon.GRID.create());
+        
+        asientosdisponibles = new TextField("Asientos Disponibles");
+        asientosdisponibles.setClearButtonVisible(true);
+        asientosdisponibles.setPrefixComponent(VaadinIcon.SEARCH.create());        
+        
+        formLayout.add(numerosala, tiposala, seccion, fila, asientosdisponibles);
+
+        editorDiv.add(formLayout);
+        createButtonLayout(editorLayoutDiv);
+
+        splitLayout.addToSecondary(editorLayoutDiv);
+    }
+    
+
+    private void createButtonLayout(Div editorLayoutDiv) 
+    {
+        HorizontalLayout buttonLayout = new HorizontalLayout();
+        buttonLayout.setClassName("button-layout");
+        
+        cancelar.addThemeVariants(ButtonVariant.LUMO_PRIMARY, ButtonVariant.LUMO_ERROR);
+        guardar.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
+        
+        buttonLayout.add(guardar, cancelar);
+        editorLayoutDiv.add(buttonLayout);
+    }
+    
+    private void createGridLayout(SplitLayout splitLayout) 
+    {
+        Div wrapper = new Div();
+        wrapper.setClassName("grid-wrapper");
+        splitLayout.addToPrimary(wrapper);
+        wrapper.add(grid);
+    }
+    
+
+    private void refreshGrid() 
+    {
+        grid.select(null);
         grid.getDataProvider().refreshAll();
     }
+    
 
-}
+    private void clearForm() 
+    {
+        populateForm(null);
+    }
+
+    
+    private void populateForm(SalasInfo value) 
+    {
+        this.salasInfo = value;
+       // binder.readBean(this.salasInfo);
+    }
+    
+
+    public void mostrarMensajeExito(String mensaje) 
+    {
+        Notification notification = Notification.show(mensaje);
+        notification.addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+        notification.setPosition(Position.TOP_END);
+    }
+
+    public void mostrarMensajeError(String mensaje) 
+    {
+        Notification notification = new Notification();
+        notification.addThemeVariants(NotificationVariant.LUMO_ERROR);
+
+        Div text = new Div(new Text(mensaje));
+
+        Button closeButton = new Button(new Icon(VaadinIcon.CLOSE_SMALL));
+        closeButton.addThemeVariants(ButtonVariant.LUMO_TERTIARY_INLINE);
+        closeButton.setAriaLabel("Close");
+        closeButton.addClickListener(event -> notification.close());
+
+        HorizontalLayout layout = new HorizontalLayout(text, closeButton);
+        layout.setAlignItems(Alignment.CENTER);
+
+        notification.add(layout);
+        notification.setPosition(Position.TOP_CENTER);
+        notification.open();
+    }
+
+	@Override
+	public void mostrarSalasEnGrid(List<SalasInfo> items) {
+		Collection<SalasInfo> itemsCollection = items;
+		this.salas = items;
+		grid.setItems(itemsCollection);
+		
+	}
+
+	//@Override
+	//public void mostrarMensajeError(String ) {
+	// TODO Auto-generated method stub
+		
+	
+
+	//@Override
+	//public void mostrarMensajeExito(String ) {
+		// TODO Auto-generated method stub
+		
+	}
